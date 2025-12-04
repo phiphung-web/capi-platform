@@ -1,5 +1,6 @@
-import prisma from '../config/database';
-import { InternalEvent } from '../types/internalEvent';
+import prisma from "../config/database";
+import { InternalEvent } from "../types/internalEvent";
+import { Prisma } from "@prisma/client";
 
 type DirectEventPayload = {
   mode: string;
@@ -13,7 +14,7 @@ type DirectEventPayload = {
 };
 
 const isNonEmptyString = (value: unknown) =>
-  typeof value === 'string' && value.trim().length > 0;
+  typeof value === "string" && value.trim().length > 0;
 
 export const listEvents = async (): Promise<InternalEvent[]> => {
   return [];
@@ -21,7 +22,7 @@ export const listEvents = async (): Promise<InternalEvent[]> => {
 
 export const getActiveApiKey = async (key: string) => {
   const apiKey = await prisma.apiKey.findUnique({
-    where: { key }
+    where: { key },
   });
 
   if (!apiKey || !apiKey.isActive) {
@@ -32,8 +33,8 @@ export const getActiveApiKey = async (key: string) => {
 };
 
 export const validateDirectEventPayload = (payload: any): string | null => {
-  if (!payload || payload.mode !== 'direct') {
-    return 'invalid_mode';
+  if (!payload || payload.mode !== "direct") {
+    return "invalid_mode";
   }
 
   if (
@@ -41,11 +42,14 @@ export const validateDirectEventPayload = (payload: any): string | null => {
     !isNonEmptyString(payload.event_id) ||
     !isNonEmptyString(payload.source)
   ) {
-    return 'invalid_payload';
+    return "invalid_payload";
   }
 
-  if (typeof payload.event_time !== 'number' || !Number.isInteger(payload.event_time)) {
-    return 'invalid_event_time';
+  if (
+    typeof payload.event_time !== "number" ||
+    !Number.isInteger(payload.event_time)
+  ) {
+    return "invalid_event_time";
   }
 
   return null;
@@ -54,9 +58,22 @@ export const validateDirectEventPayload = (payload: any): string | null => {
 export const createDirectEvent = async (
   projectId: string,
   payload: DirectEventPayload
-): Promise<{ eventId: string; destinations: { id: string; status: string }[] }> => {
-  const userJson = payload.user && typeof payload.user === 'object' ? payload.user : {};
-  const dataJson = payload.data && typeof payload.data === 'object' ? payload.data : {};
+): Promise<{
+  eventId: string;
+  destinations: { id: string; status: string }[];
+}> => {
+  const userJson: Prisma.InputJsonValue =
+    payload.user && typeof payload.user === "object"
+      ? (payload.user as Prisma.InputJsonValue)
+      : ({} as Prisma.InputJsonValue);
+  const dataJson: Prisma.InputJsonValue =
+    payload.data && typeof payload.data === "object"
+      ? (payload.data as Prisma.InputJsonValue)
+      : ({} as Prisma.InputJsonValue);
+  const rawPayload =
+    payload.raw_payload !== undefined
+      ? (payload.raw_payload as Prisma.InputJsonValue)
+      : undefined;
 
   const event = await prisma.event.create({
     data: {
@@ -67,13 +84,13 @@ export const createDirectEvent = async (
       source: payload.source,
       userJson,
       dataJson,
-      rawPayload: payload.raw_payload ?? null
-    }
+      ...(rawPayload !== undefined ? { rawPayload } : {}),
+    },
   });
 
   const destinations = await prisma.destination.findMany({
     where: { projectId, isActive: true },
-    select: { id: true }
+    select: { id: true },
   });
 
   if (destinations.length > 0) {
@@ -81,9 +98,9 @@ export const createDirectEvent = async (
       data: destinations.map((destination) => ({
         eventId: event.id,
         destinationId: destination.id,
-        status: 'pending',
-        attempts: 0
-      }))
+        status: "pending",
+        attempts: 0,
+      })),
     });
   }
 
@@ -91,7 +108,7 @@ export const createDirectEvent = async (
     eventId: event.id,
     destinations: destinations.map((destination) => ({
       id: destination.id,
-      status: 'pending'
-    }))
+      status: "pending",
+    })),
   };
 };
