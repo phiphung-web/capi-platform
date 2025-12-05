@@ -42,6 +42,8 @@ export async function sendFacebookEvent(
 
   const emailRaw = typeof userDataRaw.email === 'string' ? userDataRaw.email : null;
   const phoneRaw = typeof userDataRaw.phone === 'string' ? userDataRaw.phone : null;
+  const ipRaw = typeof userDataRaw.ip === 'string' ? userDataRaw.ip : null;
+  const userAgentRaw = typeof userDataRaw.user_agent === 'string' ? userDataRaw.user_agent : null;
 
   if (emailRaw) {
     userData.em = [hashSha256(emailRaw)];
@@ -51,6 +53,16 @@ export async function sendFacebookEvent(
   if (phoneRaw) {
     userData.ph = [hashSha256(phoneRaw)];
     delete userData.phone;
+  }
+
+  if (ipRaw) {
+    userData.client_ip_address = ipRaw;
+    delete userData.ip;
+  }
+
+  if (userAgentRaw) {
+    userData.client_user_agent = userAgentRaw;
+    delete userData.user_agent;
   }
 
   const customData: Record<string, unknown> = {};

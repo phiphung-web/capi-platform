@@ -8,6 +8,7 @@ type DirectEventPayload = {
   event_id: string;
   event_time: number;
   source: string;
+  source_id?: string;
   user?: Record<string, unknown>;
   data?: Record<string, unknown>;
   raw_payload?: unknown;
@@ -15,6 +16,60 @@ type DirectEventPayload = {
 
 const isNonEmptyString = (value: unknown) =>
   typeof value === "string" && value.trim().length > 0;
+
+const computeQuality = (
+  payload: DirectEventPayload,
+  user: Record<string, unknown>,
+  data: Record<string, unknown>
+) => {
+  let score = 0;
+  const flags: string[] = [];
+
+  const email = typeof (user as any).email === "string" ? (user as any).email : null;
+  const phone = typeof (user as any).phone === "string" ? (user as any).phone : null;
+  const currency = typeof (data as any).currency === "string" ? (data as any).currency : null;
+
+  if (isNonEmptyString(email)) {
+    score += 0.35;
+  } else {
+    flags.push("missing_email");
+  }
+
+  if (isNonEmptyString(phone)) {
+    score += 0.35;
+  } else {
+    flags.push("missing_phone");
+  }
+
+  if (isNonEmptyString(payload.event_id)) {
+    score += 0.1;
+  } else {
+    flags.push("missing_event_id");
+  }
+
+  if (typeof payload.event_time === "number") {
+    score += 0.1;
+  } else {
+    flags.push("missing_event_time");
+  }
+
+  if ((data as any).value !== undefined) {
+    score += 0.05;
+  } else {
+    flags.push("missing_value");
+  }
+
+  if (isNonEmptyString(currency)) {
+    score += 0.05;
+  } else {
+    flags.push("missing_currency");
+  }
+
+  return {
+    score: Math.min(1, score),
+    flags,
+  };
+};
 
 export const listEvents = async (): Promise<InternalEvent[]> => {
   return [];
@@ -74,16 +129,24 @@ export const createDirectEvent = async (
     payload.raw_payload !== undefined
       ? (payload.raw_payload as Prisma.InputJsonValue)
       : undefined;
+  const quality = computeQuality(
+    payload,
+    (userJson as Record<string, unknown>) || {},
+    (dataJson as Record<string, unknown>) || {}
+  );
 
   const event = await prisma.event.create({
     data: {
       projectId,
+      sourceId: typeof payload.source_id === "string" ? payload.source_id : null,
       eventName: payload.event_name,
       eventId: payload.event_id,
       eventTime: payload.event_time,
       source: payload.source,
       userJson,
       dataJson,
+      qualityScore: quality.score,
+      qualityFlags: quality.flags,
       ...(rawPayload !== undefined ? { rawPayload } : {}),
     },
   });

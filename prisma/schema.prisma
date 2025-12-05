@@ -15,6 +15,7 @@ model Project {
   apiKeys       ApiKey[]
   destinations  Destination[]
   events        Event[]
+  sources       Source[]
 }
 
 model ApiKey {
@@ -34,6 +35,7 @@ model Destination {
   type          String
   config        Json
   isActive      Boolean        @default(true)
+  healthStatus  String         @default("unknown")
   createdAt     DateTime       @default(now())
   deliveryLogs  DeliveryLog[]
 }
@@ -42,6 +44,8 @@ model Event {
   id            String         @id @default(cuid())
   project       Project        @relation(fields: [projectId], references: [id])
   projectId     String
+  sourceRef     Source?        @relation("SourceEvents", fields: [sourceId], references: [id])
+  sourceId      String?
   eventName     String
   eventId       String
   eventTime     Int
@@ -49,6 +53,8 @@ model Event {
   userJson      Json
   dataJson      Json
   rawPayload    Json?
+  qualityScore  Float          @default(0)
+  qualityFlags  Json?
   createdAt     DateTime       @default(now())
   deliveryLogs  DeliveryLog[]
 }
@@ -65,4 +71,16 @@ model DeliveryLog {
   lastError     String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+}
+
+model Source {
+  id          String   @id @default(cuid())
+  project     Project  @relation(fields: [projectId], references: [id])
+  projectId   String
+  name        String
+  eventKey    String   @unique
+  mappingJson Json?
+  seenFields  Json?
+  createdAt   DateTime @default(now())
+  events      Event[]  @relation("SourceEvents")
 }
