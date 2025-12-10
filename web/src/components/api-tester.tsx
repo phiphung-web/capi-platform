@@ -11,6 +11,7 @@ import { Badge } from "./ui/badge";
 import { Alert } from "./ui/alert";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000/v1";
+const ADMIN_TOKEN_ENV = process.env.NEXT_PUBLIC_ADMIN_TOKEN ?? "";
 
 type ResponseState = {
   status?: number;
@@ -40,9 +41,14 @@ const pretty = (val: unknown) => {
   }
 };
 
-export function ApiTester() {
-  const [apiKey, setApiKey] = useState("");
-  const [adminToken, setAdminToken] = useState("");
+type ApiTesterProps = {
+  defaultToken?: string | null;
+  defaultAdminToken?: string | null;
+};
+
+export function ApiTester({ defaultToken = "", defaultAdminToken = "" }: ApiTesterProps) {
+  const [token, setToken] = useState(defaultToken ?? "");
+  const [adminToken, setAdminToken] = useState(defaultAdminToken ?? ADMIN_TOKEN_ENV);
   const [baseUrl, setBaseUrl] = useState(API_BASE_URL);
   const [mode, setMode] = useState<"direct" | "mapped">("direct");
   const [directForm, setDirectForm] = useState<DirectForm>({
@@ -114,8 +120,8 @@ export function ApiTester() {
       setErrorMessage("User/Data JSON không hợp lệ.");
       return;
     }
-    if (!apiKey) {
-      setErrorMessage("Vui lòng nhập API Key.");
+    if (!token) {
+      setErrorMessage("Vui lòng nhập JWT token.");
       return;
     }
 
@@ -139,7 +145,7 @@ export function ApiTester() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(body)
       });
@@ -156,8 +162,8 @@ export function ApiTester() {
       setErrorMessage("Payload JSON không hợp lệ.");
       return;
     }
-    if (!apiKey) {
-      setErrorMessage("Vui lòng nhập API Key.");
+    if (!token) {
+      setErrorMessage("Vui lòng nhập JWT token.");
       return;
     }
     try {
@@ -174,7 +180,7 @@ export function ApiTester() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(body)
       });
@@ -229,15 +235,15 @@ export function ApiTester() {
       <Card>
         <CardHeader>
           <CardTitle>Configuration</CardTitle>
-          <CardDescription>Nhập API key và admin token để gọi backend.</CardDescription>
+          <CardDescription>Nhập JWT token và admin token để gọi backend.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2 md:col-span-1">
-            <label className="text-sm text-slate-200">API Key</label>
+            <label className="text-sm text-slate-200">JWT Token</label>
             <Input
-              placeholder="sk_live_..."
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="jwt token"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
             />
           </div>
           <div className="space-y-2 md:col-span-1">
@@ -395,9 +401,7 @@ export function ApiTester() {
                 <div className="flex items-center gap-3">
                   <h3 className="text-sm font-semibold text-slate-200">Response</h3>
                   {response?.status !== undefined ? (
-                    <Badge variant={statusVariant as any}>
-                      HTTP {response.status}
-                    </Badge>
+                    <Badge variant={statusVariant as any}>HTTP {response.status}</Badge>
                   ) : null}
                   {response?.timeMs !== undefined ? <Badge>~{response.timeMs} ms</Badge> : null}
                 </div>
