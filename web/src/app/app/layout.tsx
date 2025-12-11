@@ -4,11 +4,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
-import { ProjectProvider, useProject } from "@/contexts/ProjectContext";
+import { ProjectProvider, useCurrentProject } from "@/contexts/ProjectContext";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { token, user, projects, loading, logout } = useAuth();
-  const { projectId, setProjectId } = useProject();
+  const { currentProjectId, setCurrentProjectId } = useCurrentProject();
 
   if (!token || loading || !user) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
@@ -22,14 +22,18 @@ function Shell({ children }: { children: React.ReactNode }) {
           <div className="text-slate-400 mb-1">Current Project</div>
           <select
             className="w-full rounded-md bg-slate-900 border border-slate-700 px-2 py-1 text-sm"
-            value={projectId ?? ""}
-            onChange={(e) => setProjectId(e.target.value)}
+            value={currentProjectId ?? ""}
+            onChange={(e) => setCurrentProjectId(e.target.value || null)}
           >
-            {projects.map((p) => (
-              <option key={p.projectId} value={p.projectId}>
-                {p.projectName}
-              </option>
-            ))}
+            {projects.length === 0 ? (
+              <option value="">No project</option>
+            ) : (
+              projects.map((p) => (
+                <option key={p.projectId} value={p.projectId}>
+                  {p.projectName}
+                </option>
+              ))
+            )}
           </select>
         </div>
         <nav className="flex-1 flex flex-col gap-2 text-sm">

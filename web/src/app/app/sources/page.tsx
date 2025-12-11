@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useProject } from "@/contexts/ProjectContext";
+import { useCurrentProject } from "@/contexts/ProjectContext";
 import { apiFetch } from "@/lib/api";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,16 +23,16 @@ type SourcesResp = {
 
 export default function SourcesPage() {
   const { token } = useAuth();
-  const { projectId } = useProject();
+  const { currentProjectId } = useCurrentProject();
   const [sources, setSources] = useState<SourcesResp["sources"]>([]);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", eventKey: "", type: "" });
 
   const loadSources = async () => {
-    if (!projectId || !token) return;
+    if (!currentProjectId || !token) return;
     const { data, error } = await apiFetch<SourcesResp>(
-      `/projects/${projectId}/sources`,
+      `/projects/${currentProjectId}/sources`,
       { token }
     );
     if (error) setError(error);
@@ -42,13 +42,13 @@ export default function SourcesPage() {
   useEffect(() => {
     setError(null);
     loadSources();
-  }, [projectId, token]);
+  }, [currentProjectId, token]);
 
   const handleCreate = async () => {
-    if (!projectId || !token) return;
+    if (!currentProjectId || !token) return;
     setCreating(true);
     setError(null);
-    const { error } = await apiFetch(`/projects/${projectId}/sources`, {
+    const { error } = await apiFetch(`/projects/${currentProjectId}/sources`, {
       method: "POST",
       token,
       body: JSON.stringify({

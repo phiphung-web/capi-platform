@@ -24,6 +24,7 @@ interface AuthContextValue {
   loading: boolean;
   setToken: (token: string | null) => void;
   logout: () => void;
+  refreshMe: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -33,6 +34,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<MeResponse["user"] | null>(null);
   const [projects, setProjects] = useState<MeResponse["projects"]>([]);
   const [loading, setLoading] = useState(true);
+
+  const loadMe = async (jwt: string | null) => {
+    if (!jwt) {
+      setUser(null);
+      setProjects([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const { data, error } = await apiFetch<MeResponse>("/auth/me", {
+      method: "GET",
+      token: jwt,
+    });
+    if (error || !data?.success) {
+      setUser(null);
+      setProjects([]);
+      setTokenState(null);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("capi_token");
+      }
+    } else {
+      setUser(data.user);
+      setProjects(data.projects);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
     const stored =
@@ -45,32 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    async function fetchMe() {
-      if (!token) {
-        setUser(null);
-        setProjects([]);
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      const { data, error } = await apiFetch<MeResponse>("/auth/me", {
-        method: "GET",
-        token,
-      });
-      if (error || !data?.success) {
-        setUser(null);
-        setProjects([]);
-        setTokenState(null);
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("capi_token");
-        }
-      } else {
-        setUser(data.user);
-        setProjects(data.projects);
-      }
-      setLoading(false);
-    }
-    fetchMe();
+    loadMe(token);
   }, [token]);
 
   const setToken = (value: string | null) => {
@@ -90,9 +92,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProjects([]);
   };
 
+  const refreshMe = async () => {
+    await loadMe(token);
+  };
+
   return (
     <AuthContext.Provider
-      value={{ token, user, projects, loading, setToken, logout }}
+      value={{ token, user, projects, loading, setToken, logout, refreshMe }}
     >
       {children}
     </AuthContext.Provider>

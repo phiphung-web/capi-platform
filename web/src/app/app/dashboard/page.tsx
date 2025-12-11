@@ -2,10 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useProject } from "@/contexts/ProjectContext";
+import { useCurrentProject } from "@/contexts/ProjectContext";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 
 type StatsResp = {
   success: boolean;
@@ -28,31 +31,92 @@ type DestinationsResp = {
 };
 
 export default function DashboardPage() {
-  const { token } = useAuth();
-  const { projectId } = useProject();
+  const { token, user, projects, refreshMe } = useAuth();
+  const { currentProjectId } = useCurrentProject();
   const [stats, setStats] = useState<StatsResp["stats"] | null>(null);
   const [destinations, setDestinations] = useState<DestinationsResp["destinations"]>([]);
+  const [name, setName] = useState("");
+  const [domain, setDomain] = useState("");
+  const [description, setDescription] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
-      if (!projectId || !token) return;
+      if (!currentProjectId || !token) return;
       const { data: statsData } = await apiFetch<StatsResp>(
-        `/projects/${projectId}/stats/overview`,
+        `/projects/${currentProjectId}/stats/overview`,
         { token }
       );
       if (statsData?.success) setStats(statsData.stats);
 
       const { data: destData } = await apiFetch<DestinationsResp>(
-        `/projects/${projectId}/destinations`,
+        `/projects/${currentProjectId}/destinations`,
         { token }
       );
       if (destData?.success) setDestinations(destData.destinations);
     }
     load();
-  }, [projectId, token]);
+  }, [currentProjectId, token]);
 
-  if (!projectId) {
-    return <div>Chưa có project nào được gán.</div>;
+  const handleCreateProject = async () => {
+    if (!token) return;
+    setCreating(true);
+    setError(null);
+    const { error } = await apiFetch(`/projects`, {
+      method: "POST",
+      token,
+      body: JSON.stringify({
+        name,
+        domain: domain || undefined,
+        description: description || undefined
+      })
+    });
+    setCreating(false);
+    if (error) {
+      setError(error);
+    } else {
+      setName("");
+      setDomain("");
+      setDescription("");
+      await refreshMe();
+    }
+  };
+
+  if (!projects || projects.length === 0) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold">Chưa có project nào được gán.</h1>
+        <p className="text-slate-400">
+          Tạo project đầu tiên cho tài khoản {user?.email ?? "user"}.
+        </p>
+        {error ? <Alert title="Error">{error}</Alert> : null}
+        <div className="grid gap-3 md:grid-cols-3 max-w-2xl">
+          <Input
+            placeholder="Project name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <Input
+            placeholder="Domain (optional)"
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
+          />
+          <Input
+            placeholder="Description (optional)"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </div>
+        <Button onClick={handleCreateProject} disabled={creating || !name}>
+          {creating ? "Creating..." : "Tạo Project"}
+        </Button>
+      </div>
+    );
+  }
+
+  if (!currentProjectId) {
+    return <div>Đã có {projects.length} project.</div>;
   }
 
   return (
@@ -100,7 +164,9 @@ export default function DashboardPage() {
               >
                 <div className="space-y-1">
                   <div className="font-medium">{d.type}</div>
-                  <div className="text-slate-400 text-xs">Created: {new Date(d.createdAt).toLocaleString()}</div>
+                  <div className="text-slate-400 text-xs">
+                    Created: {new Date(d.createdAt).toLocaleString()}
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Badge variant={d.isActive ? "success" : "warning"}>

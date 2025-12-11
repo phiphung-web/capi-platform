@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
-import { useProject } from "@/contexts/ProjectContext";
+import { useCurrentProject } from "@/contexts/ProjectContext";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -22,21 +22,21 @@ type EventsResp = {
 
 export default function EventsPage() {
   const { token } = useAuth();
-  const { projectId } = useProject();
+  const { currentProjectId } = useCurrentProject();
   const [events, setEvents] = useState<EventsResp["events"]>([]);
 
   useEffect(() => {
     async function load() {
-      if (!token || !projectId) return;
-      const { data } = await apiFetch<EventsResp>(`/projects/${projectId}/events?limit=50`, {
+      if (!token || !currentProjectId) return;
+      const { data } = await apiFetch<EventsResp>(`/projects/${currentProjectId}/events?limit=50`, {
         token
       });
       if (data?.success) setEvents(data.events);
     }
     load();
-  }, [token, projectId]);
+  }, [token, currentProjectId]);
 
-  if (!projectId) return <div>Chưa có project.</div>;
+  if (!currentProjectId) return <div>Chưa có project.</div>;
 
   return (
     <div className="space-y-4">

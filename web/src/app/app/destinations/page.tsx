@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useProject } from "@/contexts/ProjectContext";
+import { useCurrentProject } from "@/contexts/ProjectContext";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,15 +24,15 @@ type DestResp = {
 
 export default function DestinationsPage() {
   const { token } = useAuth();
-  const { projectId } = useProject();
+  const { currentProjectId } = useCurrentProject();
   const [destinations, setDestinations] = useState<DestResp["destinations"]>([]);
   const [form, setForm] = useState({ pixelId: "", accessToken: "", testEventCode: "" });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    if (!projectId || !token) return;
-    const { data, error } = await apiFetch<DestResp>(`/projects/${projectId}/destinations`, {
+    if (!currentProjectId || !token) return;
+    const { data, error } = await apiFetch<DestResp>(`/projects/${currentProjectId}/destinations`, {
       token
     });
     if (error) setError(error);
@@ -43,7 +43,7 @@ export default function DestinationsPage() {
 
   useEffect(() => {
     load();
-  }, [projectId, token]);
+  }, [currentProjectId, token]);
 
   useEffect(() => {
     const fb = destinations.find((d) => d.type === "facebook");
@@ -57,10 +57,10 @@ export default function DestinationsPage() {
   }, [destinations]);
 
   const handleSave = async () => {
-    if (!projectId || !token) return;
+    if (!currentProjectId || !token) return;
     setSaving(true);
     setError(null);
-    const { error } = await apiFetch(`/projects/${projectId}/destinations/facebook`, {
+    const { error } = await apiFetch(`/projects/${currentProjectId}/destinations/facebook`, {
       method: "POST",
       token,
       body: JSON.stringify({
@@ -74,7 +74,7 @@ export default function DestinationsPage() {
     else load();
   };
 
-  if (!projectId) return <div>Chưa có project.</div>;
+  if (!currentProjectId) return <div>Chưa có project.</div>;
 
   const facebook = destinations.find((d) => d.type === "facebook");
 

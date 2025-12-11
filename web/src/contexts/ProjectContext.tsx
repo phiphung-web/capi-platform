@@ -1,36 +1,41 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
 
-type ProjectCtx = {
-  projectId: string | null;
-  setProjectId: (id: string | null) => void;
-};
+interface ProjectContextValue {
+  currentProjectId: string | null;
+  setCurrentProjectId: (id: string | null) => void;
+}
 
-const ProjectContext = createContext<ProjectCtx | undefined>(undefined);
+const ProjectContext = createContext<ProjectContextValue | undefined>(undefined);
 
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const { projects } = useAuth();
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (projects.length > 0 && !projectId) {
-      setProjectId(projects[0].projectId);
+    if (projects.length === 0) {
+      setCurrentProjectId(null);
+      return;
     }
-  }, [projects, projectId]);
+    const exists = projects.some((p) => p.projectId === currentProjectId);
+    if (!currentProjectId || !exists) {
+      setCurrentProjectId(projects[0].projectId);
+    }
+  }, [projects, currentProjectId]);
 
   return (
-    <ProjectContext.Provider value={{ projectId, setProjectId }}>
+    <ProjectContext.Provider value={{ currentProjectId, setCurrentProjectId }}>
       {children}
     </ProjectContext.Provider>
   );
 }
 
-export function useProject() {
+export function useCurrentProject() {
   const ctx = useContext(ProjectContext);
   if (!ctx) {
-    throw new Error("useProject must be used within ProjectProvider");
+    throw new Error("useCurrentProject must be used within ProjectProvider");
   }
   return ctx;
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { useProject } from "@/contexts/ProjectContext";
+import { useCurrentProject } from "@/contexts/ProjectContext";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -25,20 +25,20 @@ type EventResp = {
 export default function EventDetailPage() {
   const params = useParams<{ id: string }>();
   const { token } = useAuth();
-  const { projectId } = useProject();
+  const { currentProjectId } = useCurrentProject();
   const [event, setEvent] = useState<EventResp["event"] | null>(null);
 
   useEffect(() => {
     async function load() {
-      if (!projectId || !token || !params?.id) return;
+      if (!currentProjectId || !token || !params?.id) return;
       const { data } = await apiFetch<EventResp>(
-        `/projects/${projectId}/events/${params.id}`,
+        `/projects/${currentProjectId}/events/${params.id}`,
         { token }
       );
       if (data?.success) setEvent(data.event);
     }
     load();
-  }, [projectId, token, params]);
+  }, [currentProjectId, token, params]);
 
   if (!event) return <div>Loading...</div>;
 
