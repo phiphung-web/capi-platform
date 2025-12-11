@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import { authMiddleware, AuthenticatedRequest } from "../middleware/authMiddleware";
 import { requireProjectRole } from "../middleware/authorization";
@@ -130,13 +131,18 @@ router.put("/sources/:sourceId", authMiddleware, async (req: AuthenticatedReques
     mappingJson?: unknown;
   };
 
+  const dataToUpdate: Prisma.SourceUpdateInput = {
+    name: name ?? source.name,
+    type: type ?? source.type,
+  };
+
+  if (typeof mappingJson !== "undefined") {
+    dataToUpdate.mappingJson = mappingJson as Prisma.InputJsonValue;
+  }
+
   const updated = await prisma.source.update({
     where: { id: sourceId },
-    data: {
-      name: name ?? source.name,
-      type: type ?? source.type,
-      mappingJson: mappingJson ?? source.mappingJson,
-    },
+    data: dataToUpdate,
   });
 
   return res.json({ success: true, source: updated });
