@@ -42,6 +42,7 @@ export default function SourcesPage() {
   useEffect(() => {
     setError(null);
     loadSources();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProjectId, token]);
 
   const handleCreate = async () => {
@@ -66,7 +67,7 @@ export default function SourcesPage() {
     }
   };
 
-  if (!projectId) return <div>Chưa có project.</div>;
+  if (!currentProjectId) return <div>Chưa có project.</div>;
 
   return (
     <div className="space-y-4">
@@ -94,7 +95,7 @@ export default function SourcesPage() {
             value={form.type}
             onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
           />
-          <Button onClick={handleCreate} disabled={creating}>
+          <Button onClick={handleCreate} disabled={creating || !form.name || !form.eventKey}>
             {creating ? "Creating..." : "Create"}
           </Button>
         </CardContent>
