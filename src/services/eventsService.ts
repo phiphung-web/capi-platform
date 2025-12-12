@@ -95,13 +95,18 @@ export const listEvents = async (): Promise<InternalEvent[]> => {
 };
 
 export const getActiveApiKey = async (key: string) => {
-  const apiKey = await prisma.apiKey.findUnique({
-    where: { key },
+  const apiKey = await prisma.apiKey.findFirst({
+    where: { key, isActive: true }
   });
 
-  if (!apiKey || !apiKey.isActive) {
+  if (!apiKey) {
     return null;
   }
+
+  await prisma.apiKey.update({
+    where: { id: apiKey.id },
+    data: { lastUsedAt: new Date() }
+  });
 
   return apiKey;
 };

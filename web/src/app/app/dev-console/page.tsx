@@ -72,6 +72,12 @@ export default function DevConsolePage() {
   const [loadedEvent, setLoadedEvent] = useState<any>(null);
   const [deliveries, setDeliveries] = useState<DeliveriesResp["deliveries"]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [apiKeyStatus, setApiKeyStatus] = useState<string | null>(null);
+  const [projectApiKey, setProjectApiKey] = useState<string | null>(null);
+  const [loadingApiKey, setLoadingApiKey] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+
+  const storageKey = currentProjectId ? `capi_api_key_${currentProjectId}` : null;
 
   const parsedUserError = useMemo(() => {
     try {
@@ -125,7 +131,7 @@ export default function DevConsolePage() {
   };
 
   const handleSend = async () => {
-    if (!token || !currentProjectId) return;
+    if (!token || !currentProjectId || !projectApiKey) return;
     if (parsedUserError || parsedDataError || parsedRawError) {
       setSendError("JSON không hợp lệ");
       return;
@@ -155,7 +161,7 @@ export default function DevConsolePage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "x-api-key": projectApiKey
         },
         body: JSON.stringify(body)
       });
@@ -212,6 +218,62 @@ export default function DevConsolePage() {
 
   if (!token) return <div>Cần đăng nhập.</div>;
   if (!currentProjectId) return <div>Chưa chọn project.</div>;
+
+  const handleCreateApiKey = async () => {
+    if (!token || !currentProjectId) return;
+    setApiKeyError(null);
+    setLoadingApiKey(true);
+    const { data, error } = await apiFetch<{
+      success: boolean;
+      apiKey: { id: string; name: string; prefix: string; key: string };
+    }>(`/projects/${currentProjectId}/api-keys`, {
+      method: "POST",
+      token,
+      body: JSON.stringify({ name: "Dev Console Key" })
+    });
+    setLoadingApiKey(false);
+    if (error || !data?.success) {
+      setApiKeyError(error ?? "Tạo API key thất bại");
+    } else {
+      setProjectApiKey(data.apiKey.key);
+      setApiKeyStatus("API key ready");
+      if (storageKey) {
+        localStorage.setItem(storageKey, data.apiKey.key);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const loadApiKey = async () => {
+      if (!token || !currentProjectId || !storageKey) return;
+      setApiKeyError(null);
+      setApiKeyStatus(null);
+      const cached = localStorage.getItem(storageKey);
+      if (cached) {
+        setProjectApiKey(cached);
+        setApiKeyStatus("API key ready");
+        return;
+      }
+      setLoadingApiKey(true);
+      const { data, error } = await apiFetch<{
+        success: boolean;
+        apiKeys: { id: string; name: string; prefix: string; isActive: boolean }[];
+      }>(`/projects/${currentProjectId}/api-keys`, { token });
+      setLoadingApiKey(false);
+      if (error || !data?.success) {
+        setApiKeyError(error ?? "Không tải được API keys");
+        return;
+      }
+      if (data.apiKeys.length === 0) {
+        setApiKeyStatus("Chưa có API key");
+      } else {
+        setApiKeyStatus(
+          "API key đã tồn tại nhưng không xem lại được. Tạo key mới để dùng Dev Console."
+        );
+      }
+    };
+    loadApiKey();
+  }, [token, currentProjectId, storageKey]);
 
   return (
     <div className="space-y-6">
@@ -274,7 +336,7 @@ export default function DevConsolePage() {
               ) : null}
             </div>
             <div className="flex justify-end gap-2">
-              <Button onClick={handleSend} disabled={sending}>
+              <Button onClick={handleSend} disabled={sending || !projectApiKey}>
                 {sending ? "Sending..." : "Send Event"}
               </Button>
               <Button onClick={handleProcess} disabled={processing}>
@@ -296,6 +358,27 @@ export default function DevConsolePage() {
         </Card>
 
         <div className="space-y-4">
+          <Card className="bg-slate-900 border-slate-800">
+            <CardHeader>
+              <CardTitle>Project API Key</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {apiKeyStatus ? <div>{apiKeyStatus}</div> : null}
+              {apiKeyError ? <Alert title="Error">{apiKeyError}</Alert> : null}
+              {projectApiKey ? (
+                <div className="space-y-1">
+                  <div className="text-xs text-slate-400">Lưu ý: key chỉ hiện tại client.</div>
+                  <pre className="bg-slate-950 border border-slate-800 rounded-md p-2 text-xs break-all">
+                    {projectApiKey}
+                  </pre>
+                </div>
+              ) : (
+                <Button onClick={handleCreateApiKey} disabled={loadingApiKey}>
+                  {loadingApiKey ? "Creating..." : "Create API Key"}
+                </Button>
+              )}
+            </CardContent>
+          </Card>
           <Card className="bg-slate-900 border-slate-800">
             <CardHeader>
               <CardTitle>Event Detail</CardTitle>

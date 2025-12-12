@@ -8,13 +8,12 @@ export const listEvents = async (_req: Request, res: Response) => {
 
 export const createEvent = async (req: Request, res: Response) => {
   try {
-    console.log("--- /v1/events incoming body ---");
-    console.log(JSON.stringify(req.body, null, 2));
-    const authHeader =
-      req.header("authorization") || req.header("Authorization") || "";
-    const token = authHeader.startsWith("Bearer ")
-      ? authHeader.slice(7).trim()
-      : "";
+    const apiKeyHeader = req.header("x-api-key") || "";
+    const authHeader = req.header("authorization") || req.header("Authorization") || "";
+    let token = apiKeyHeader;
+    if (!token && authHeader.startsWith("Bearer ")) {
+      token = authHeader.slice(7).trim();
+    }
 
     if (!token) {
       return res.status(401).json({ success: false, error: "unauthorized" });

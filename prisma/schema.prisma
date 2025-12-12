@@ -27,7 +27,9 @@ model ApiKey {
   projectId String
   name      String
   key       String   @unique
+  prefix    String
   isActive  Boolean  @default(true)
+  lastUsedAt DateTime?
   createdAt DateTime @default(now())
 }
 
