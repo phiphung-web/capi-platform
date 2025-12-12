@@ -6,15 +6,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCurrentProject } from "@/contexts/ProjectContext";
 import { apiFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert } from "@/components/ui/alert";
 
 type EventResp = {
   success: boolean;
   event: {
     id: string;
     eventName: string;
+    eventId: string;
     eventTime: number;
-    sourceTag: string;
-    qualityScore: number;
+    sourceTag: string | null;
+    qualityScore: number | null;
     userJson: any;
     dataJson: any;
     rawPayload: any;
@@ -27,20 +29,32 @@ export default function EventDetailPage() {
   const { token } = useAuth();
   const { currentProjectId } = useCurrentProject();
   const [event, setEvent] = useState<EventResp["event"] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function load() {
+    const load = async () => {
       if (!currentProjectId || !token || !params?.id) return;
-      const { data } = await apiFetch<EventResp>(
+      setLoading(true);
+      setError(null);
+      const { data, error } = await apiFetch<EventResp>(
         `/projects/${currentProjectId}/events/${params.id}`,
         { token }
       );
-      if (data?.success) setEvent(data.event);
-    }
+      setLoading(false);
+      if (error || !data?.success) {
+        setError(error ?? "Không tải được event");
+        return;
+      }
+      setEvent(data.event);
+    };
     load();
   }, [currentProjectId, token, params]);
 
-  if (!event) return <div>Loading...</div>;
+  if (!currentProjectId) return <div>Chưa chọn project.</div>;
+  if (loading) return <div>Đang tải event...</div>;
+  if (error) return <Alert title="Error">{error}</Alert>;
+  if (!event) return <div>Không tìm thấy event.</div>;
 
   return (
     <div className="space-y-4">
@@ -50,10 +64,13 @@ export default function EventDetailPage() {
           <CardTitle>{event.eventName}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <div>Source: {event.sourceTag}</div>
-          <div>Event Time: {event.eventTime}</div>
-          <div>Quality: {event.qualityScore}</div>
+          <div>ID: {event.id}</div>
+          <div>Event ID: {event.eventId}</div>
+          <div>Source: {event.sourceTag ?? "-"}</div>
+          <div>Event Time: {new Date(event.eventTime * 1000).toLocaleString()}</div>
+          <div>Quality: {event.qualityScore ?? "-"}</div>
           <div>Created: {new Date(event.createdAt).toLocaleString()}</div>
+
           <div className="space-y-2">
             <div className="font-semibold">User JSON</div>
             <pre className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 overflow-auto max-h-64">

@@ -16,6 +16,7 @@ type StatsResp = {
     totalEvents: number;
     totalSuccessDeliveries: number;
     totalFailedDeliveries: number;
+    totalPendingDeliveries: number;
   };
 };
 
@@ -40,15 +41,24 @@ export default function DashboardPage() {
   const [description, setDescription] = useState("");
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+  const [errorStats, setErrorStats] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       if (!currentProjectId || !token) return;
+      setLoadingStats(true);
+      setErrorStats(null);
       const { data: statsData } = await apiFetch<StatsResp>(
         `/projects/${currentProjectId}/stats/overview`,
         { token }
       );
-      if (statsData?.success) setStats(statsData.stats);
+      if (statsData?.success) {
+        setStats(statsData.stats);
+      } else {
+        setErrorStats("Không tải được stats");
+      }
+      setLoadingStats(false);
 
       const { data: destData } = await apiFetch<DestinationsResp>(
         `/projects/${currentProjectId}/destinations`,
@@ -122,6 +132,11 @@ export default function DashboardPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <p className="text-sm text-slate-300">
+        Project hiện tại: {projects.find((p) => p.projectId === currentProjectId)?.projectName || ""}
+      </p>
+      {errorStats ? <Alert title="Error">{errorStats}</Alert> : null}
+      {loadingStats ? <div>Đang tải stats...</div> : null}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader>
@@ -145,6 +160,14 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="text-3xl font-semibold text-rose-400">
             {stats ? stats.totalFailedDeliveries : "-"}
+          </CardContent>
+        </Card>
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <CardTitle>Pending Deliveries</CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold text-amber-300">
+            {stats ? stats.totalPendingDeliveries : "-"}
           </CardContent>
         </Card>
       </div>
