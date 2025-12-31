@@ -40,7 +40,9 @@ function Shell({ children }: { children: React.ReactNode }) {
           <Link href="/app/dashboard">Dashboard</Link>
           <Link href="/app/sources">Sources</Link>
           <Link href="/app/destinations">Destinations</Link>
+          <Link href="/app/stages">Stages</Link>
           <Link href="/app/events">Events</Link>
+          <Link href="/app/delivery-logs">Delivery Logs</Link>
           <Link href="/app/dev-console">Dev Console</Link>
         </nav>
         <div className="mt-4 text-xs">

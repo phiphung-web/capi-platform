@@ -15,6 +15,9 @@ type EventResp = {
     eventName: string;
     eventId: string;
     eventTime: number;
+    stage: string | null;
+    occurredAt: string | null;
+    dedupeKey?: string;
     sourceTag: string | null;
     qualityScore: number | null;
     userJson: any;
@@ -66,8 +69,14 @@ export default function EventDetailPage() {
         <CardContent className="space-y-3 text-sm">
           <div>ID: {event.id}</div>
           <div>Event ID: {event.eventId}</div>
+          <div>Stage: {event.stage ?? "-"}</div>
           <div>Source: {event.sourceTag ?? "-"}</div>
           <div>Event Time: {new Date(event.eventTime * 1000).toLocaleString()}</div>
+          <div>
+            Occurred At:{" "}
+            {event.occurredAt ? new Date(event.occurredAt).toLocaleString() : "-"}
+          </div>
+          {event.dedupeKey ? <div>Dedupe Key: {event.dedupeKey}</div> : null}
           <div>Quality: {event.qualityScore ?? "-"}</div>
           <div>Created: {new Date(event.createdAt).toLocaleString()}</div>
 

@@ -10,6 +10,8 @@ import sourcesRouter from './sources';
 import eventsAdminRouter from './eventsAdmin';
 import deliveryLogsRouter from './deliveryLogs';
 import apiKeysRouter from './apiKeys';
+import stagesRouter from './stages';
+import destinationRulesRouter from './destinationRules';
 
 const router = Router();
 
@@ -22,6 +24,8 @@ router.use('/projects', destinationsRouter);
 router.use('/projects', eventsAdminRouter);
 router.use('/projects', deliveryLogsRouter);
 router.use('/projects', apiKeysRouter);
+router.use('/projects', stagesRouter);
+router.use('/projects', destinationRulesRouter);
 router.use('/', sourcesRouter);
 
 export default router;

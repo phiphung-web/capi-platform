@@ -1,8 +1,12 @@
 import crypto from "crypto";
 
+export function sha256Hex(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
 export function sha256Normalize(value: string): string {
   const normalized = value.trim().toLowerCase();
-  return crypto.createHash("sha256").update(normalized).digest("hex");
+  return sha256Hex(normalized);
 }
 
 export function normalizePhone(phone: string): string {

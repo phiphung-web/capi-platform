@@ -74,6 +74,8 @@ eventsAdminRouter.get(
         eventName: e.eventName,
         eventId: e.eventId,
         eventTime: e.eventTime,
+        stage: e.stage,
+        occurredAt: e.occurredAt,
         sourceTag: e.sourceTag,
         qualityScore: e.qualityScore,
         createdAt: e.createdAt,
@@ -146,13 +148,13 @@ eventsAdminRouter.get(
     ] = await Promise.all([
       prisma.event.count({ where: { projectId } }),
       prisma.deliveryLog.count({
-        where: { event: { projectId }, status: "success" },
+        where: { event: { projectId }, status: "SUCCESS" },
       }),
       prisma.deliveryLog.count({
-        where: { event: { projectId }, status: "failed" },
+        where: { event: { projectId }, status: "FAILED" },
       }),
       prisma.deliveryLog.count({
-        where: { event: { projectId }, status: "pending" },
+        where: { event: { projectId }, status: "PENDING" },
       }),
     ]);
 

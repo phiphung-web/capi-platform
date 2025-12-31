@@ -1,7 +1,12 @@
-import crypto, { randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import { InternalEvent } from "../types/internalEvent";
+import {
+  computeDedupeKey,
+  normalizeDirectPayload,
+  NormalizedEventInput
+} from "./eventNormalization";
+import { planDeliveryLogsForEvent } from "./deliveryPlanner";
 
 export type DirectEventPayload = {
   mode: "direct";
@@ -15,13 +20,33 @@ export type DirectEventPayload = {
   raw_payload?: unknown;
 };
 
+export type UniversalEventPayload = {
+  event_name: string;
+  event_id?: string;
+  event_time?: number | string;
+  stage?: string;
+  occurred_at?: string;
+  actor?: Record<string, unknown>;
+  object?: Record<string, unknown>;
+  value?: Record<string, unknown>;
+  properties?: Record<string, unknown>;
+  user?: Record<string, unknown>;
+  data?: Record<string, unknown>;
+  raw_payload?: unknown;
+  source?: string;
+  source_id?: string;
+};
+
 export type MappedEventPayload = {
   mode: "mapped";
   event_key: string;
   payload: Record<string, unknown>;
 };
 
-export type IngestPayload = DirectEventPayload | MappedEventPayload;
+export type IngestPayload =
+  | DirectEventPayload
+  | MappedEventPayload
+  | UniversalEventPayload;
 
 type SimpleMapping = {
   event_name: string;
@@ -112,17 +137,13 @@ export const getActiveApiKey = async (key: string) => {
 };
 
 export const validateDirectEventPayload = (payload: any): string | null => {
-  if (!payload || payload.mode !== "direct") {
+  if (!payload) return "invalid_payload";
+  if (payload.mode && payload.mode !== "direct") {
     return "invalid_mode";
   }
-
-  if (
-    !isNonEmptyString(payload.event_name) ||
-    !isNonEmptyString(payload.source)
-  ) {
+  if (!isNonEmptyString(payload.event_name)) {
     return "invalid_payload";
   }
-
   return null;
 };
 
@@ -188,150 +209,207 @@ const applySimpleMapping = (
   };
 };
 
-const createDeliveryLogs = async (projectId: string, eventId: string) => {
-  const destinations = await prisma.destination.findMany({
-    where: { projectId, isActive: true },
-    select: { id: true },
-  });
-
-  if (destinations.length > 0) {
-    await prisma.deliveryLog.createMany({
-      data: destinations.map((destination) => ({
-        eventId,
-        destinationId: destination.id,
-        status: "pending",
-        attempts: 0,
-      })),
-    });
-  }
-
-  return destinations.map((destination) => ({
-    id: destination.id,
-    status: "pending",
-  }));
-};
-
-const createEventRecord = async (data: Prisma.EventCreateInput) => {
-  return prisma.event.create({ data });
-};
-
-export const createDirectEvent = async (
-  projectId: string,
-  payload: DirectEventPayload
-): Promise<{ eventId: string; event_internal_id: string; destinations: { id: string; status: string }[] }> => {
-  const userJson: Prisma.InputJsonValue =
-    payload.user && typeof payload.user === "object"
-      ? (payload.user as Prisma.InputJsonValue)
-      : ({} as Prisma.InputJsonValue);
-  const dataJson: Prisma.InputJsonValue =
-    payload.data && typeof payload.data === "object"
-      ? (payload.data as Prisma.InputJsonValue)
-      : ({} as Prisma.InputJsonValue);
-  const rawPayload =
-    payload.raw_payload !== undefined
-      ? (payload.raw_payload as Prisma.InputJsonValue)
+const normalizeMappedPayload = (
+  payload: MappedEventPayload,
+  mapping: SimpleMapping
+): NormalizedEventInput | null => {
+  const mapped = applySimpleMapping(payload.payload, mapping);
+  const payloadStage =
+    payload.payload && typeof payload.payload === "object"
+      ? (payload.payload as any).stage
+      : undefined;
+  const payloadOccurredAt =
+    payload.payload && typeof payload.payload === "object"
+      ? (payload.payload as any).occurred_at
       : undefined;
 
-  const finalEventId =
-    typeof payload.event_id === "string" && payload.event_id.trim().length > 0
-      ? payload.event_id.trim()
-      : (crypto.randomUUID
-          ? crypto.randomUUID()
-          : `evt_${Date.now()}_${Math.random().toString(16).slice(2)}`);
+  const normalized = normalizeDirectPayload(
+    {
+      event_name: mapped.eventName,
+      source: mapped.sourceTag,
+      user: mapped.user,
+      data: mapped.data,
+      stage: payloadStage,
+      occurred_at: payloadOccurredAt,
+      raw_payload: payload.payload
+    } as any,
+    mapped.sourceTag
+  );
 
-  const finalEventTime =
-    typeof payload.event_time === "number" && Number.isFinite(payload.event_time)
-      ? payload.event_time
-      : Math.floor(Date.now() / 1000);
+  if (!normalized) return null;
+  return normalized;
+};
 
-  const quality = computeQuality({
-    eventId: finalEventId,
-    eventTime: finalEventTime,
-    user: (userJson as Record<string, unknown>) || {},
-    data: (dataJson as Record<string, unknown>) || {},
+const resolveStage = async (
+  projectId: string,
+  stage: string | null | undefined,
+  eventName: string
+) => {
+  if (stage) return stage;
+
+  const stages = await prisma.stageDefinition.findMany({
+    where: { projectId },
+    orderBy: { order: "asc" }
   });
 
-  const event = await createEventRecord({
+  let defaultStage: string | null = null;
+  for (const s of stages) {
+    if (s.isDefault && !defaultStage) {
+      defaultStage = s.key;
+    }
+    const rules = s.inferenceRules as any;
+    const matches = Array.isArray(rules?.event_name_equals)
+      ? rules.event_name_equals
+      : [];
+    if (matches.includes(eventName)) {
+      return s.key;
+    }
+  }
+
+  return defaultStage;
+};
+
+const buildEventCreateInput = (
+  projectId: string,
+  input: NormalizedEventInput,
+  dedupeKey: string
+): Prisma.EventCreateInput => {
+  const quality = computeQuality({
+    eventId: input.eventId,
+    eventTime: input.eventTime,
+    user: (input.userJson as Record<string, unknown>) || {},
+    data: (input.dataJson as Record<string, unknown>) || {}
+  });
+
+  return {
     project: { connect: { id: projectId } },
-    source: payload.source_id ? { connect: { id: payload.source_id } } : undefined,
-    eventName: payload.event_name,
-    eventId: finalEventId,
-    eventTime: finalEventTime,
-    sourceTag: payload.source,
-    userJson,
-    dataJson,
+    source: input.sourceId ? { connect: { id: input.sourceId } } : undefined,
+    eventName: input.eventName,
+    eventId: input.eventId,
+    eventTime: input.eventTime,
+    stage: input.stage ?? undefined,
+    occurredAt: input.occurredAt ?? undefined,
+    receivedAt: input.receivedAt,
+    clientEventId: input.clientEventId ?? undefined,
+    dedupeKey,
+    schemaVersion: input.schemaVersion,
+    actorEmail: input.actorEmail ?? undefined,
+    actorPhone: input.actorPhone ?? undefined,
+    actorExternalId: input.actorExternalId ?? undefined,
+    actorIp: input.actorIp ?? undefined,
+    actorUserAgent: input.actorUserAgent ?? undefined,
+    objectType: input.objectType ?? undefined,
+    objectId: input.objectId ?? undefined,
+    valueAmount:
+      typeof input.valueAmount === "number" ? input.valueAmount : input.valueAmount ?? undefined,
+    valueCurrency: input.valueCurrency ?? undefined,
+    sourceTag: input.sourceTag,
+    userJson: input.userJson,
+    dataJson: input.dataJson,
     qualityScore: quality.score,
     qualityFlags: quality.flags as Prisma.InputJsonValue,
-    ...(rawPayload !== undefined ? { rawPayload } : {}),
-  });
-
-  const destinations = await createDeliveryLogs(projectId, event.id);
-
-  return { eventId: event.id, event_internal_id: event.id, destinations };
+    ...(input.rawPayload !== undefined ? { rawPayload: input.rawPayload } : {})
+  };
 };
 
 export const ingestEvent = async (projectId: string, body: IngestPayload) => {
-  if (body.mode === "direct") {
+  let normalized: NormalizedEventInput | null = null;
+  let sourceId: string | null = null;
+  let sourceTagOverride: string | null = null;
+
+  if (body && (body as MappedEventPayload).mode === "mapped") {
+    const validationError = validateMappedEventPayload(body);
+    if (validationError) {
+      return { error: validationError, status: 400 as const };
+    }
+
+    const source = await prisma.source.findFirst({
+      where: { projectId, eventKey: (body as MappedEventPayload).event_key }
+    });
+
+    if (!source) {
+      return { error: "unknown_event_key", status: 400 as const };
+    }
+
+    if (!source.mappingJson) {
+      return { error: "source_not_mapped", status: 400 as const };
+    }
+
+    const mapping = source.mappingJson as unknown as SimpleMapping;
+    normalized = normalizeMappedPayload(body as MappedEventPayload, mapping);
+    sourceId = source.id;
+    sourceTagOverride = source.type || source.name || "mapped";
+  } else {
     const validationError = validateDirectEventPayload(body);
     if (validationError) {
       return { error: validationError, status: 400 as const };
     }
-    const result = await createDirectEvent(projectId, body);
-    return {
-      success: true,
-      event_internal_id: result.event_internal_id,
-      destinations: result.destinations,
-    };
+    normalized = normalizeDirectPayload(body as any, "direct");
   }
 
-  const validationError = validateMappedEventPayload(body);
-  if (validationError) {
-    return { error: validationError, status: 400 as const };
+  if (!normalized) {
+    return { error: "invalid_payload", status: 400 as const };
   }
 
-  const source = await prisma.source.findFirst({
-    where: { projectId, eventKey: body.event_key },
-  });
-
-  if (!source) {
-    return { error: "unknown_event_key", status: 400 as const };
+  if (sourceId) {
+    normalized.sourceId = sourceId;
+  }
+  if (sourceTagOverride && (!normalized.sourceTag || normalized.sourceTag === "mapped")) {
+    normalized.sourceTag = sourceTagOverride;
   }
 
-  if (!source.mappingJson) {
-    return { error: "source_not_mapped", status: 400 as const };
+  const resolvedStage = await resolveStage(
+    projectId,
+    normalized.stage ?? null,
+    normalized.eventName
+  );
+  normalized.stage = resolvedStage;
+
+  const dedupeKey = computeDedupeKey(projectId, normalized);
+
+  let event;
+  let isDuplicate = false;
+  try {
+    event = await prisma.event.create({
+      data: buildEventCreateInput(projectId, normalized, dedupeKey)
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      event = await prisma.event.findFirst({
+        where: { projectId, dedupeKey }
+      });
+      isDuplicate = true;
+    } else {
+      throw err;
+    }
   }
 
-  const mapping = source.mappingJson as unknown as SimpleMapping;
-  const mapped = applySimpleMapping(body.payload, mapping);
+  if (!event) {
+    return { error: "conflict", status: 409 as const };
+  }
 
-  const eventId = randomUUID();
-  const eventTime = Math.floor(Date.now() / 1000);
+  let deliveries = { created: 0, skippedDuplicates: 0, destinations: [] as { id: string; status: string }[] };
 
-  const userJson = mapped.user as Prisma.InputJsonValue;
-  const dataJson = mapped.data as Prisma.InputJsonValue;
+  if (!isDuplicate) {
+    deliveries = await planDeliveryLogsForEvent(event);
+  }
 
-  const quality = computeQuality({
-    eventId,
-    eventTime,
-    user: mapped.user,
-    data: mapped.data,
-  });
-
-  const event = await createEventRecord({
-    project: { connect: { id: projectId } },
-    source: { connect: { id: source.id } },
-    eventName: mapped.eventName,
-    eventId,
-    eventTime,
-    sourceTag: mapped.sourceTag || source.type || source.name || "mapped",
-    userJson,
-    dataJson,
-    rawPayload: body.payload as Prisma.InputJsonValue,
-    qualityScore: quality.score,
-    qualityFlags: quality.flags as Prisma.InputJsonValue,
-  });
-
-  const destinations = await createDeliveryLogs(projectId, event.id);
-
-  return { success: true, event_internal_id: event.id, destinations };
+  return {
+    success: true,
+    ok: true,
+    event_internal_id: event.id,
+    eventId: event.id,
+    event: {
+      id: event.id,
+      event_name: event.eventName,
+      stage: event.stage ?? null,
+      dedupe_key: event.dedupeKey,
+      is_duplicate: isDuplicate
+    },
+    deliveries: {
+      created: deliveries.created,
+      skipped_duplicates: deliveries.skippedDuplicates
+    },
+    destinations: deliveries.destinations
+  };
 };

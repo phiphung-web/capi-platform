@@ -9,13 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 
 type DestResp = {
   success: boolean;
   destinations: {
     id: string;
     type: string;
+    adapterKey: string;
     isActive: boolean;
+    isEnabled: boolean;
     healthStatus: string;
     createdAt: string;
   }[];
@@ -110,6 +113,7 @@ export default function DestinationsPage() {
                 >
                   <div>
                     <div className="font-medium">{d.type}</div>
+                    <div className="text-xs text-slate-400">Adapter: {d.adapterKey}</div>
                     <div className="text-xs text-slate-400">
                       Created: {new Date(d.createdAt).toLocaleString()}
                     </div>
@@ -118,7 +122,15 @@ export default function DestinationsPage() {
                     <Badge variant={d.isActive ? "success" : "warning"}>
                       {d.isActive ? "Active" : "Inactive"}
                     </Badge>
+                    <Badge variant={d.isEnabled ? "success" : "warning"}>
+                      {d.isEnabled ? "Enabled" : "Disabled"}
+                    </Badge>
                     <Badge>{d.healthStatus}</Badge>
+                  </div>
+                  <div className="text-xs">
+                    <Link className="underline text-slate-300" href={`/app/destinations/${d.id}/rules`}>
+                      Rules
+                    </Link>
                   </div>
                 </div>
               ))

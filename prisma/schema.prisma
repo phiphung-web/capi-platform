@@ -7,6 +7,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum DeliveryStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  RETRYING
+  DEAD
+}
+
 model Project {
   id            String        @id @default(cuid())
   name          String
@@ -19,6 +28,7 @@ model Project {
   events        Event[]
   sources       Source[]
   members       ProjectMember[]
+  stages        StageDefinition[]
 }
 
 model ApiKey {
@@ -38,12 +48,17 @@ model Destination {
   project       Project        @relation(fields: [projectId], references: [id])
   projectId     String
   type          String
-  config        Json
+  adapterKey    String
+  config        Json           @default("{}")
   isActive      Boolean        @default(true)
+  isEnabled     Boolean        @default(true)
   healthStatus  String         @default("UNKNOWN")
+  rulesetVersion Int           @default(1)
+  deliveryPolicy Json          @default("{\"maxAttempts\":8,\"baseBackoffSeconds\":5,\"maxBackoffSeconds\":3600,\"jitterRatio\":0.2}")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   deliveryLogs  DeliveryLog[]
+  rules         DestinationRule[]
 }
 
 model Event {
@@ -55,6 +70,21 @@ model Event {
   eventName     String
   eventId       String
   eventTime     Int
+  stage         String?
+  occurredAt    DateTime?
+  receivedAt    DateTime       @default(now())
+  clientEventId String?
+  dedupeKey     String
+  schemaVersion Int            @default(1)
+  actorEmail     String?
+  actorPhone     String?
+  actorExternalId String?
+  actorIp        String?
+  actorUserAgent String?
+  objectType     String?
+  objectId       String?
+  valueAmount    Decimal?
+  valueCurrency  String?
   sourceTag     String         @default("unknown")
   userJson      Json
   dataJson      Json
@@ -63,6 +93,11 @@ model Event {
   qualityFlags  Json?
   createdAt     DateTime       @default(now())
   deliveryLogs  DeliveryLog[]
+
+  @@unique([projectId, dedupeKey])
+  @@index([projectId, occurredAt])
+  @@index([projectId, stage])
+  @@index([projectId, eventName])
 }
 
 model DeliveryLog {
@@ -71,12 +106,28 @@ model DeliveryLog {
   eventId       String
   destination   Destination  @relation(fields: [destinationId], references: [id])
   destinationId String
-  status        String
-  attempts      Int          @default(0)
-  lastResponse  Json?
+  status        DeliveryStatus @default(PENDING)
+  attemptCount  Int            @default(0)
+  nextAttemptAt DateTime?
+  lastAttemptAt DateTime?
   lastError     String?
+  providerStatusCode Int?
+  providerResponse Json?
+  processingLockId String?
+  processingLockedAt DateTime?
+  deliveredAt   DateTime?
+  adapterKey    String
+  destinationRule DestinationRule? @relation(fields: [destinationRuleId], references: [id])
+  destinationRuleId String?
+  providerEventName String?
+  providerRequest Json?
+  uniqueDeliveryKey String @unique
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([destinationId, status])
+  @@index([eventId])
 }
 
 model Source {
@@ -116,4 +167,38 @@ model ProjectMember {
   updatedAt   DateTime @updatedAt
 
   @@unique([userId, projectId])
+}
+
+model DestinationRule {
+  id            String      @id @default(cuid())
+  destination   Destination @relation(fields: [destinationId], references: [id])
+  destinationId String
+  name          String
+  isEnabled     Boolean     @default(true)
+  priority      Int         @default(100)
+  match         Json
+  action        Json
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  deliveryLogs  DeliveryLog[]
+
+  @@unique([destinationId, name])
+  @@index([destinationId, isEnabled, priority])
+}
+
+model StageDefinition {
+  id            String   @id @default(cuid())
+  project       Project  @relation(fields: [projectId], references: [id])
+  projectId     String
+  key           String
+  displayName   String
+  description   String?
+  order         Int      @default(0)
+  isDefault     Boolean  @default(false)
+  inferenceRules Json    @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([projectId, key])
 }

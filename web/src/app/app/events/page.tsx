@@ -15,6 +15,8 @@ type EventsResp = {
     id: string;
     eventName: string;
     eventTime: number;
+    stage: string | null;
+    occurredAt?: string | null;
     sourceTag: string;
     qualityScore: number | null;
     createdAt: string;
@@ -83,6 +85,7 @@ export default function EventsPage() {
             <thead className="text-left text-slate-400">
               <tr>
                 <th className="py-2 pr-4">Event</th>
+                <th className="py-2 pr-4">Stage</th>
                 <th className="py-2 pr-4">Source</th>
                 <th className="py-2 pr-4">Quality</th>
                 <th className="py-2 pr-4">Created</th>
@@ -93,6 +96,7 @@ export default function EventsPage() {
               {events.map((e) => (
                 <tr key={e.id}>
                   <td className="py-2 pr-4">{e.eventName}</td>
+                  <td className="py-2 pr-4">{e.stage ?? "-"}</td>
                   <td className="py-2 pr-4">{e.sourceTag}</td>
                   <td className="py-2 pr-4">{e.qualityScore ?? "-"}</td>
                   <td className="py-2 pr-4">{new Date(e.createdAt).toLocaleString()}</td>
@@ -105,7 +109,7 @@ export default function EventsPage() {
               ))}
               {events.length === 0 ? (
                 <tr>
-                  <td className="py-4 text-slate-400" colSpan={5}>
+                  <td className="py-4 text-slate-400" colSpan={6}>
                     Chưa có event.
                   </td>
                 </tr>

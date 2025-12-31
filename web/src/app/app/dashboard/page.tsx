@@ -25,7 +25,9 @@ type DestinationsResp = {
   destinations: {
     id: string;
     type: string;
+    adapterKey: string;
     isActive: boolean;
+    isEnabled: boolean;
     healthStatus: string;
     createdAt: string;
   }[];
@@ -187,6 +189,7 @@ export default function DashboardPage() {
               >
                 <div className="space-y-1">
                   <div className="font-medium">{d.type}</div>
+                  <div className="text-slate-400 text-xs">Adapter: {d.adapterKey}</div>
                   <div className="text-slate-400 text-xs">
                     Created: {new Date(d.createdAt).toLocaleString()}
                   </div>
@@ -194,6 +197,9 @@ export default function DashboardPage() {
                 <div className="flex gap-2">
                   <Badge variant={d.isActive ? "success" : "warning"}>
                     {d.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                  <Badge variant={d.isEnabled ? "success" : "warning"}>
+                    {d.isEnabled ? "Enabled" : "Disabled"}
                   </Badge>
                   <Badge>{d.healthStatus}</Badge>
                 </div>

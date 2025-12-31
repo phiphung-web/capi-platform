@@ -202,7 +202,18 @@ export default function DevConsolePage() {
         json = await res.json();
       } catch {}
       if (json?.success) {
-        setProcessedCount(json.processed ?? 0);
+        if (typeof json.processed === "number") {
+          setProcessedCount(json.processed);
+        } else if (json.processed) {
+          const total =
+            (json.processed.success ?? 0) +
+            (json.processed.retrying ?? 0) +
+            (json.processed.failed ?? 0) +
+            (json.processed.dead ?? 0);
+          setProcessedCount(total);
+        } else {
+          setProcessedCount(json.claimed ?? 0);
+        }
         if (eventInternalId) {
           await loadEventAndDeliveries(eventInternalId);
         }
@@ -292,14 +303,22 @@ export default function DevConsolePage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid md:grid-cols-2 gap-3">
-              <Input label="event_name" value={eventName} onChange={(e) => setEventName(e.target.value)} />
-              <Input label="event_id" value={eventId} onChange={(e) => setEventId(e.target.value)} />
-              <Input
-                label="event_time (unix)"
-                value={eventTime}
-                onChange={(e) => setEventTime(e.target.value)}
-              />
-              <Input label="source" value={sourceTag} onChange={(e) => setSourceTag(e.target.value)} />
+              <div className="space-y-1">
+                <label className="text-xs text-slate-300">event_name</label>
+                <Input value={eventName} onChange={(e) => setEventName(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-300">event_id</label>
+                <Input value={eventId} onChange={(e) => setEventId(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-300">event_time (unix)</label>
+                <Input value={eventTime} onChange={(e) => setEventTime(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-300">source</label>
+                <Input value={sourceTag} onChange={(e) => setSourceTag(e.target.value)} />
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm text-slate-200">user JSON</label>
